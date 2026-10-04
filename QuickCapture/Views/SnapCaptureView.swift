@@ -1,8 +1,10 @@
+import AVFoundation
 import PhotosUI
 import SwiftUI
 
-/// Snap capture: scan a page (or pick a photo), extract its text,
-/// let the user tidy it up, then append it to the text-space.
+/// Snap capture: point the camera at text (framed live with yellow brackets),
+/// tap the shutter, and get the extracted text straight away to tidy up and add.
+/// Falls back to picking a photo where live text isn't supported.
 struct SnapCaptureView: View {
     private enum Phase {
         case scanning
@@ -13,24 +15,23 @@ struct SnapCaptureView: View {
 
     @Environment(CaptureStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-    @State private var phase: Phase = DocumentScanner.isSupported ? .scanning : .choosingPhoto
+    @Environment(\.openURL) private var openURL
+    @State private var phase: Phase = LiveTextScannerController.isSupported ? .scanning : .choosingPhoto
+    @State private var scannerController = LiveTextScannerController()
+    @State private var cameraReady = false
+    @State private var isCapturing = false
     @State private var draft = ""
+    /// Text from earlier snaps, kept when the user taps Snap More.
+    @State private var earlierText = ""
     @State private var photoItem: PhotosPickerItem?
     @State private var errorMessage: String?
+    @State private var offerSettings = false
 
     var body: some View {
         Group {
             switch phase {
             case .scanning:
-                DocumentScanner(
-                    onFinish: { images in recognize(images) },
-                    onCancel: { dismiss() },
-                    onError: { error in
-                        errorMessage = error.localizedDescription
-                        phase = .choosingPhoto
-                    }
-                )
-                .ignoresSafeArea()
+                cameraScreen
             case .choosingPhoto:
                 photoChooser
             case .recognizing:
@@ -48,6 +49,52 @@ struct SnapCaptureView: View {
 
     // MARK: - Screens
 
+    private var cameraScreen: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if cameraReady {
+                LiveTextScanner(controller: scannerController) { error in
+                    showPhotoFallback("The camera isn't available: \(error.localizedDescription)")
+                }
+                .ignoresSafeArea()
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            Button(action: backOut) {
+                Image(systemName: "xmark")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(.black.opacity(0.4), in: Circle())
+            }
+            .accessibilityLabel("Close")
+            .padding()
+        }
+        .overlay(alignment: .bottom) {
+            shutterButton
+                .padding(.bottom, 24)
+        }
+        .task { await prepareCamera() }
+    }
+
+    private var shutterButton: some View {
+        Button(action: snap) {
+            ZStack {
+                Circle()
+                    .stroke(.white, lineWidth: 5)
+                    .frame(width: 80, height: 80)
+                Circle()
+                    .fill(.white)
+                    .frame(width: 66, height: 66)
+                    .scaleEffect(isCapturing ? 0.85 : 1)
+                    .animation(.easeOut(duration: 0.15), value: isCapturing)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isCapturing || !cameraReady)
+        .accessibilityLabel("Snap")
+    }
+
     private var photoChooser: some View {
         NavigationStack {
             ContentUnavailableView {
@@ -55,22 +102,23 @@ struct SnapCaptureView: View {
             } description: {
                 if let errorMessage {
                     Text(errorMessage)
-                } else if !DocumentScanner.isSupported {
-                    Text("The camera scanner isn't available on this device. Choose a photo of some text instead.")
+                } else if !LiveTextScannerController.isSupported {
+                    Text("Live text scanning isn't available on this device. Choose a photo of some text instead.")
                 }
             } actions: {
                 PhotosPicker("Choose from Photos", selection: $photoItem, matching: .images)
                     .buttonStyle(.borderedProminent)
-                if DocumentScanner.isSupported {
-                    Button("Scan with Camera") {
-                        errorMessage = nil
-                        phase = .scanning
+                if offerSettings {
+                    Button("Open Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            openURL(url)
+                        }
                     }
                 }
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel", action: backOut)
                 }
             }
         }
@@ -80,17 +128,19 @@ struct SnapCaptureView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 if draft.isEmpty {
-                    Text("No text found. Try again with the page flat and well lit.")
+                    Text("No text found. Try again with the text in focus and well lit.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .padding()
                 }
                 TextEditor(text: $draft)
                     .padding(.horizontal, 12)
-                Button(DocumentScanner.isSupported ? "Scan Again" : "Choose Another Photo",
-                       systemImage: "arrow.counterclockwise") {
+                Button(LiveTextScannerController.isSupported && !offerSettings ? "Snap More" : "Add Another Photo",
+                       systemImage: "plus.viewfinder") {
+                    earlierText = draft
                     photoItem = nil
-                    phase = DocumentScanner.isSupported ? .scanning : .choosingPhoto
+                    errorMessage = nil
+                    phase = LiveTextScannerController.isSupported && !offerSettings ? .scanning : .choosingPhoto
                 }
                 .buttonStyle(.bordered)
                 .padding()
@@ -114,15 +164,46 @@ struct SnapCaptureView: View {
 
     // MARK: - Actions
 
-    private func recognize(_ images: [UIImage]) {
-        phase = .recognizing
+    private func prepareCamera() async {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            cameraReady = true
+        case .notDetermined:
+            if await AVCaptureDevice.requestAccess(for: .video) {
+                cameraReady = true
+            } else {
+                showCameraDenied()
+            }
+        default:
+            showCameraDenied()
+        }
+    }
+
+    private func showCameraDenied() {
+        offerSettings = true
+        showPhotoFallback("Camera access is turned off for Quick Capture. Turn it on in Settings, or choose a photo instead.")
+    }
+
+    private func showPhotoFallback(_ message: String) {
+        errorMessage = message
+        phase = .choosingPhoto
+    }
+
+    /// Captures a still and reads it with full-accuracy OCR. If that finds
+    /// nothing, falls back to whatever the viewfinder was recognizing live.
+    private func snap() {
+        guard !isCapturing else { return }
+        isCapturing = true
         Task {
+            defer { isCapturing = false }
             do {
-                draft = try await TextRecognizer.recognize(images)
-                phase = .review
+                let photo = try await scannerController.capturePhoto()
+                let liveText = scannerController.liveText
+                phase = .recognizing
+                let text = try await TextRecognizer.recognize([photo])
+                showReview(text.isEmpty ? liveText : text)
             } catch {
-                errorMessage = "Couldn't read text: \(error.localizedDescription)"
-                phase = .choosingPhoto
+                showPhotoFallback("Couldn't read text: \(error.localizedDescription)")
             }
         }
     }
@@ -131,10 +212,32 @@ struct SnapCaptureView: View {
         phase = .recognizing
         guard let data = try? await item.loadTransferable(type: Data.self),
               let image = UIImage(data: data) else {
-            errorMessage = "Couldn't open that photo."
-            phase = .choosingPhoto
+            showPhotoFallback("Couldn't open that photo.")
             return
         }
-        recognize([image])
+        do {
+            showReview(try await TextRecognizer.recognize([image]))
+        } catch {
+            showPhotoFallback("Couldn't read text: \(error.localizedDescription)")
+        }
+    }
+
+    private func showReview(_ newText: String) {
+        draft = [earlierText, newText]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n\n")
+        phase = .review
+    }
+
+    /// Close/Cancel on the camera or photo screen: return to the review if
+    /// there's earlier text from this capture, otherwise close Snap.
+    private func backOut() {
+        if earlierText.isEmpty {
+            dismiss()
+        } else {
+            draft = earlierText
+            phase = .review
+        }
     }
 }
