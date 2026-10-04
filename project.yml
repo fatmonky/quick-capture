@@ -39,6 +39,18 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pjteh.QuickCaptureTests
         GENERATE_INFOPLIST_FILE: YES
+  QuickCaptureUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - QuickCaptureUITests
+    dependencies:
+      - target: QuickCapture
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pjteh.QuickCaptureUITests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: QuickCapture
 schemes:
   QuickCapture:
     build:
@@ -50,3 +62,4 @@ schemes:
       config: Debug
       targets:
         - QuickCaptureTests
+        - QuickCaptureUITests

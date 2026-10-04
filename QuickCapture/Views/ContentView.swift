@@ -62,7 +62,12 @@ struct ContentView: View {
                     Text("This can't be undone.")
                 }
                 .sheet(item: $activeCapture) { mode in
-                    CapturePlaceholderSheet(mode: mode)
+                    switch mode {
+                    case .type:
+                        TypeCaptureSheet()
+                    case .speak, .snap:
+                        CapturePlaceholderSheet(mode: mode)
+                    }
                 }
         }
     }
@@ -163,7 +168,7 @@ extension LabelStyle where Self == VerticalCaptureLabelStyle {
     static var verticalCapture: Self { .init() }
 }
 
-/// Stand-in until each capture flow is built (steps 4–6).
+/// Stand-in until each capture flow is built (steps 5–6).
 private struct CapturePlaceholderSheet: View {
     let mode: CaptureMode
     @Environment(\.dismiss) private var dismiss
