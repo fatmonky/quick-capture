@@ -1,0 +1,52 @@
+name: QuickCapture
+options:
+  bundleIdPrefix: com.pjteh
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  QuickCapture:
+    type: application
+    platform: iOS
+    sources:
+      - QuickCapture
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pjteh.QuickCapture
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_CFBundleDisplayName: Quick Capture
+        INFOPLIST_KEY_NSCameraUsageDescription: Quick Capture uses the camera to snap printed text and turn it into notes.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Quick Capture uses the microphone to transcribe what you say into notes.
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Quick Capture converts your speech to text on your device.
+  QuickCaptureTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - QuickCaptureTests
+    dependencies:
+      - target: QuickCapture
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pjteh.QuickCaptureTests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  QuickCapture:
+    build:
+      targets:
+        QuickCapture: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - QuickCaptureTests
