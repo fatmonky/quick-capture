@@ -22,6 +22,10 @@ struct QuickCaptureApp: App {
         }
         let url = URL.temporaryDirectory.appending(path: "uitest-capture.txt")
         try? FileManager.default.removeItem(at: url)
-        return CaptureStore(fileURL: url)
+        let store = CaptureStore(fileURL: url)
+        if let seed = ProcessInfo.processInfo.environment["UITEST_SEED_TEXT"] {
+            store.text = seed
+        }
+        return store
     }
 }

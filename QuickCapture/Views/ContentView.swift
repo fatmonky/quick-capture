@@ -29,17 +29,16 @@ struct ContentView: View {
     @State private var activeCapture: CaptureMode?
     @State private var isConfirmingClear = false
     @State private var showCopied = false
-    @FocusState private var editorFocused: Bool
+    @State private var isEditing = false
 
     var body: some View {
         @Bindable var store = store
 
         NavigationStack {
-            TextEditor(text: $store.text)
-                .focused($editorFocused)
-                .padding(.horizontal, 12)
+            CaptureTextView(text: $store.text, isEditing: $isEditing,
+                            scrollToEndTrigger: store.appendCount)
                 .overlay(alignment: .topLeading) {
-                    if store.text.isEmpty && !editorFocused {
+                    if store.text.isEmpty && !isEditing {
                         emptyStateHint
                     }
                 }
@@ -48,10 +47,12 @@ struct ContentView: View {
                         countFooter
                         captureBar
                     }
+                    .background(.bar)
                 }
                 .navigationTitle("Quick Capture")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbarContent }
+                .sensoryFeedback(.success, trigger: store.appendCount)
                 .confirmationDialog(
                     "Clear all captured text?",
                     isPresented: $isConfirmingClear,
@@ -82,7 +83,7 @@ struct ContentView: View {
     private var emptyStateHint: some View {
         Text("Tap Type, Speak or Snap to capture text.\nEverything you capture is added here.")
             .foregroundStyle(.secondary)
-            .padding(.horizontal, 17)
+            .padding(.horizontal, 16)
             .padding(.top, 8)
             .allowsHitTesting(false)
     }
@@ -104,7 +105,7 @@ struct ContentView: View {
         HStack(spacing: 12) {
             ForEach(CaptureMode.allCases) { mode in
                 Button {
-                    editorFocused = false
+                    isEditing = false
                     activeCapture = mode
                 } label: {
                     Label(mode.title, systemImage: mode.systemImage)
@@ -118,7 +119,6 @@ struct ContentView: View {
         .padding(.horizontal)
         .padding(.top, 8)
         .padding(.bottom, 4)
-        .background(.bar)
     }
 
     @ToolbarContentBuilder
@@ -130,20 +130,21 @@ struct ContentView: View {
             .disabled(store.text.isEmpty)
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
-            Button(showCopied ? "Copied" : "Copy",
-                   systemImage: showCopied ? "checkmark" : "doc.on.doc") {
-                copyAll()
-            }
-            .disabled(store.text.isEmpty)
+            if isEditing {
+                Button("Done") { isEditing = false }
+                    .fontWeight(.semibold)
+            } else {
+                Button(showCopied ? "Copied" : "Copy",
+                       systemImage: showCopied ? "checkmark" : "doc.on.doc") {
+                    copyAll()
+                }
+                .disabled(store.text.isEmpty)
 
-            ShareLink(item: store.text, subject: Text("Quick Capture")) {
-                Label("Export", systemImage: "square.and.arrow.up")
+                ShareLink(item: store.text, subject: Text("Quick Capture")) {
+                    Label("Export", systemImage: "square.and.arrow.up")
+                }
+                .disabled(store.text.isEmpty)
             }
-            .disabled(store.text.isEmpty)
-        }
-        ToolbarItemGroup(placement: .keyboard) {
-            Spacer()
-            Button("Done") { editorFocused = false }
         }
     }
 

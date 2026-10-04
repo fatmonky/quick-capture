@@ -16,6 +16,10 @@ final class CaptureStore {
         didSet { scheduleSave() }
     }
 
+    /// Increments on every successful append (not on manual edits), so the UI
+    /// can react to new captures — haptics, scrolling to the end.
+    private(set) var appendCount = 0
+
     @ObservationIgnored private let fileURL: URL
     @ObservationIgnored private var saveTask: Task<Void, Never>?
 
@@ -32,6 +36,7 @@ final class CaptureStore {
 
         let existing = text.trimmingCharacters(in: .whitespacesAndNewlines)
         text = existing.isEmpty ? trimmed : existing + Self.separator + trimmed
+        appendCount += 1
     }
 
     func clear() {

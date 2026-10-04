@@ -64,6 +64,15 @@ struct CaptureStoreTests {
         #expect(CaptureStore(fileURL: fileURL).text.isEmpty)
     }
 
+    @Test func appendCountTracksOnlySuccessfulAppends() {
+        let store = CaptureStore(fileURL: fileURL)
+        store.append("One")
+        store.append("   ")
+        store.text += " edited by hand"
+        store.append("Two")
+        #expect(store.appendCount == 2)
+    }
+
     @Test func missingFileStartsEmpty() {
         #expect(CaptureStore(fileURL: fileURL).text.isEmpty)
     }
