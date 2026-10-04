@@ -61,13 +61,16 @@ struct ContentView: View {
                 } message: {
                     Text("This can't be undone.")
                 }
-                .sheet(item: $activeCapture) { mode in
+                .sheet(item: captureBinding(excluding: .snap)) { mode in
                     switch mode {
                     case .type:
                         TypeCaptureSheet()
                     case .speak, .snap:
                         CapturePlaceholderSheet(mode: mode)
                     }
+                }
+                .fullScreenCover(item: captureBinding(only: .snap)) { _ in
+                    SnapCaptureView()
                 }
         }
     }
@@ -142,6 +145,23 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Presentation
+
+    /// Snap runs full screen (it hosts the camera); the other captures are sheets.
+    private func captureBinding(only mode: CaptureMode) -> Binding<CaptureMode?> {
+        Binding(
+            get: { activeCapture == mode ? mode : nil },
+            set: { activeCapture = $0 }
+        )
+    }
+
+    private func captureBinding(excluding mode: CaptureMode) -> Binding<CaptureMode?> {
+        Binding(
+            get: { activeCapture == mode ? nil : activeCapture },
+            set: { activeCapture = $0 }
+        )
+    }
+
     // MARK: - Actions
 
     private func copyAll() {
@@ -168,7 +188,7 @@ extension LabelStyle where Self == VerticalCaptureLabelStyle {
     static var verticalCapture: Self { .init() }
 }
 
-/// Stand-in until each capture flow is built (steps 5–6).
+/// Stand-in until each capture flow is built (step 6).
 private struct CapturePlaceholderSheet: View {
     let mode: CaptureMode
     @Environment(\.dismiss) private var dismiss
