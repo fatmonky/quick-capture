@@ -65,8 +65,10 @@ struct ContentView: View {
                     switch mode {
                     case .type:
                         TypeCaptureSheet()
-                    case .speak, .snap:
-                        CapturePlaceholderSheet(mode: mode)
+                    case .speak:
+                        AudioCaptureSheet()
+                    case .snap:
+                        SnapCaptureView()
                     }
                 }
                 .fullScreenCover(item: captureBinding(only: .snap)) { _ in
@@ -186,28 +188,6 @@ struct VerticalCaptureLabelStyle: LabelStyle {
 
 extension LabelStyle where Self == VerticalCaptureLabelStyle {
     static var verticalCapture: Self { .init() }
-}
-
-/// Stand-in until each capture flow is built (step 6).
-private struct CapturePlaceholderSheet: View {
-    let mode: CaptureMode
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ContentUnavailableView(
-                "\(mode.title) capture",
-                systemImage: mode.systemImage,
-                description: Text("Coming soon.")
-            )
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
 }
 
 #Preview {
