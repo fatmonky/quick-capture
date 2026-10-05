@@ -31,10 +31,13 @@ struct CaptureTextView: UIViewRepresentable {
             textView.text = text
         }
 
+        // Change focus after this SwiftUI update finishes. Dismissing the
+        // keyboard mid-update leaves the capture bar stranded where the
+        // keyboard was, because the layout misses the keyboard hiding.
         if isEditing, !textView.isFirstResponder {
-            textView.becomeFirstResponder()
+            DispatchQueue.main.async { textView.becomeFirstResponder() }
         } else if !isEditing, textView.isFirstResponder {
-            textView.resignFirstResponder()
+            DispatchQueue.main.async { textView.resignFirstResponder() }
         }
 
         if context.coordinator.lastScrollTrigger != scrollToEndTrigger {

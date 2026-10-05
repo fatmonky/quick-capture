@@ -53,6 +53,26 @@ final class MainScreenUITests: XCTestCase {
                       "Cursor wasn't at the end, so the view didn't scroll to the newest capture")
     }
 
+    func testCaptureBarSitsAboveKeyboardWhileTyping() {
+        app.launch()
+
+        let snap = app.buttons["Snap"]
+        XCTAssertTrue(snap.waitForExistence(timeout: 3))
+        let restingY = snap.frame.midY
+
+        app.textViews.firstMatch.tap()
+        let keyboard = app.keyboards.firstMatch
+        XCTAssertTrue(keyboard.waitForExistence(timeout: 3))
+        sleep(1)
+        XCTAssertLessThanOrEqual(snap.frame.maxY, keyboard.frame.minY)
+
+        app.buttons["Done"].tap()
+        XCTAssertTrue(keyboard.waitForNonExistence(timeout: 3))
+        sleep(1)
+        attachScreenshot("after-done")
+        XCTAssertEqual(snap.frame.midY, restingY, accuracy: 2)
+    }
+
     func testEditingShowsDoneInsteadOfShareButtons() {
         app.launchEnvironment["UITEST_SEED_TEXT"] = "Some text"
         app.launch()
