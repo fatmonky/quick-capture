@@ -1,15 +1,14 @@
 import SwiftUI
 import UIKit
 
-/// The three ways to add text to the text-space.
+/// The ways to add text to the text-space (besides typing into it directly).
 enum CaptureMode: String, Identifiable, CaseIterable {
-    case type, speak, snap
+    case speak, snap
 
     var id: Self { self }
 
     var title: String {
         switch self {
-        case .type: "Type"
         case .speak: "Speak"
         case .snap: "Snap"
         }
@@ -17,7 +16,6 @@ enum CaptureMode: String, Identifiable, CaseIterable {
 
     var systemImage: String {
         switch self {
-        case .type: "keyboard"
         case .speak: "mic.fill"
         case .snap: "camera.fill"
         }
@@ -62,15 +60,8 @@ struct ContentView: View {
                 } message: {
                     Text("This can't be undone.")
                 }
-                .sheet(item: captureBinding(excluding: .snap)) { mode in
-                    switch mode {
-                    case .type:
-                        TypeCaptureSheet()
-                    case .speak:
-                        AudioCaptureSheet()
-                    case .snap:
-                        SnapCaptureView()
-                    }
+                .sheet(item: captureBinding(only: .speak)) { _ in
+                    AudioCaptureSheet()
                 }
                 .fullScreenCover(item: captureBinding(only: .snap)) { _ in
                     SnapCaptureView()
@@ -81,7 +72,7 @@ struct ContentView: View {
     // MARK: - Subviews
 
     private var emptyStateHint: some View {
-        Text("Tap Type, Speak or Snap to capture text.\nEverything you capture is added here.")
+        Text("Tap here to type, or use Speak or Snap to capture text.\nEverything you capture is added here.")
             .foregroundStyle(.secondary)
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -109,11 +100,12 @@ struct ContentView: View {
                     activeCapture = mode
                 } label: {
                     Label(mode.title, systemImage: mode.systemImage)
-                        .labelStyle(.verticalCapture)
-                        .frame(maxWidth: .infinity, minHeight: 56)
+                        .font(.headline)
+                        .foregroundStyle(.tint)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(.tint.opacity(0.2), in: Capsule())
+                        .contentShape(Capsule())
                 }
-                .buttonStyle(.borderedProminent)
-                .buttonBorderShape(.roundedRectangle(radius: 14))
             }
         }
         .padding(.horizontal)
@@ -150,17 +142,10 @@ struct ContentView: View {
 
     // MARK: - Presentation
 
-    /// Snap runs full screen (it hosts the camera); the other captures are sheets.
+    /// Snap runs full screen (it hosts the camera); Speak is a sheet.
     private func captureBinding(only mode: CaptureMode) -> Binding<CaptureMode?> {
         Binding(
             get: { activeCapture == mode ? mode : nil },
-            set: { activeCapture = $0 }
-        )
-    }
-
-    private func captureBinding(excluding mode: CaptureMode) -> Binding<CaptureMode?> {
-        Binding(
-            get: { activeCapture == mode ? nil : activeCapture },
             set: { activeCapture = $0 }
         )
     }
@@ -175,20 +160,6 @@ struct ContentView: View {
             showCopied = false
         }
     }
-}
-
-/// Icon above title, used for the large capture buttons.
-struct VerticalCaptureLabelStyle: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        VStack(spacing: 4) {
-            configuration.icon.font(.title3).frame(height: 26)
-            configuration.title.font(.subheadline.weight(.semibold))
-        }
-    }
-}
-
-extension LabelStyle where Self == VerticalCaptureLabelStyle {
-    static var verticalCapture: Self { .init() }
 }
 
 #Preview {

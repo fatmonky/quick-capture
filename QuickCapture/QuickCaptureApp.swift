@@ -9,6 +9,7 @@ struct QuickCaptureApp: App {
         WindowGroup {
             ContentView()
                 .environment(store)
+                .task { await appendTestCapture() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { store.saveNow() }
@@ -27,5 +28,14 @@ struct QuickCaptureApp: App {
             store.text = seed
         }
         return store
+    }
+
+    /// UI tests can pass `UITEST_APPEND_TEXT` to have a capture appended once the
+    /// main screen is showing, standing in for a Speak or Snap capture.
+    private func appendTestCapture() async {
+        guard ProcessInfo.processInfo.arguments.contains("-uiTesting"),
+              let snippet = ProcessInfo.processInfo.environment["UITEST_APPEND_TEXT"] else { return }
+        try? await Task.sleep(for: .seconds(1))
+        store.append(snippet)
     }
 }

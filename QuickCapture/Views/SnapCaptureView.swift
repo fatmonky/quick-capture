@@ -79,20 +79,18 @@ struct SnapCaptureView: View {
 
     private var shutterButton: some View {
         Button(action: snap) {
-            ZStack {
-                Circle()
-                    .stroke(.white, lineWidth: 5)
-                    .frame(width: 80, height: 80)
-                Circle()
-                    .fill(.white)
-                    .frame(width: 66, height: 66)
-                    .scaleEffect(isCapturing ? 0.85 : 1)
-                    .animation(.easeOut(duration: 0.15), value: isCapturing)
-            }
+            Text("Capture Text")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 32)
+                .frame(minHeight: 56)
+                .background(.blue, in: Capsule())
+                .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
+                .scaleEffect(isCapturing ? 0.94 : 1)
+                .animation(.easeOut(duration: 0.15), value: isCapturing)
         }
         .buttonStyle(.plain)
         .disabled(isCapturing || !cameraReady)
-        .accessibilityLabel("Snap")
     }
 
     private var photoChooser: some View {
