@@ -20,6 +20,21 @@ enum CaptureMode: String, Identifiable, CaseIterable {
         case .snap: "camera.fill"
         }
     }
+
+    var color: Color {
+        switch self {
+        case .speak: .red
+        case .snap: Color(red: 1.0, green: 0.72, blue: 0.0) // amber
+        }
+    }
+
+    /// Text and icon colour that reads on `color`.
+    var labelColor: Color {
+        switch self {
+        case .speak: .white
+        case .snap: .black
+        }
+    }
 }
 
 struct ContentView: View {
@@ -101,9 +116,9 @@ struct ContentView: View {
                 } label: {
                     Label(mode.title, systemImage: mode.systemImage)
                         .font(.headline)
-                        .foregroundStyle(.tint)
+                        .foregroundStyle(mode.labelColor)
                         .frame(maxWidth: .infinity, minHeight: 52)
-                        .background(.tint.opacity(0.2), in: Capsule())
+                        .background(mode.color.opacity(0.9), in: Capsule())
                         .contentShape(Capsule())
                 }
             }
