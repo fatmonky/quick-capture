@@ -20,7 +20,7 @@ final class SnapCaptureUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Snap"].waitForExistence(timeout: 3))
     }
 
-    func testPickingPhotoExtractsTextAndAppends() throws {
+    func testPickingPhotoAddsTextDirectly() throws {
         app.buttons["Snap"].tap()
         app.buttons["Choose from Photos"].tap()
 
@@ -33,22 +33,16 @@ final class SnapCaptureUITests: XCTestCase {
         sleep(2)
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.17, dy: 0.455)).tap()
 
-        let addButton = app.buttons["Add"]
-        XCTAssertTrue(addButton.waitForExistence(timeout: 20))
-        let review = app.textViews.firstMatch
-        let recognized = review.value as? String ?? ""
+        // The recognized text goes straight into the text-space; there's no review step.
+        XCTAssertTrue(app.buttons["Speak"].waitForExistence(timeout: 20))
+        let editor = app.textViews.firstMatch
+        let filled = NSPredicate(format: "value != ''")
+        wait(for: [expectation(for: filled, evaluatedWith: editor)], timeout: 5)
+        let recognized = editor.value as? String ?? ""
         let textAttachment = XCTAttachment(string: recognized)
         textAttachment.name = "recognized-text"
         textAttachment.lifetime = .keepAlways
         add(textAttachment)
-        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        shot.name = "review-screen"
-        shot.lifetime = .keepAlways
-        add(shot)
         XCTAssertFalse(recognized.isEmpty)
-
-        addButton.tap()
-        XCTAssertTrue(app.buttons["Snap"].waitForExistence(timeout: 3))
-        XCTAssertEqual(app.textViews.firstMatch.value as? String, recognized)
     }
 }

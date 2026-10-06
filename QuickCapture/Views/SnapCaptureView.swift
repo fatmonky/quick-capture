@@ -3,14 +3,13 @@ import PhotosUI
 import SwiftUI
 
 /// Snap capture: point the camera at text (framed live with yellow brackets),
-/// tap the shutter, and get the extracted text straight away to tidy up and add.
-/// Falls back to picking a photo where live text isn't supported.
+/// tap Capture Text, and the extracted text is added straight to the text-space,
+/// where it can be edited. Falls back to picking a photo where live text isn't supported.
 struct SnapCaptureView: View {
     private enum Phase {
         case scanning
         case choosingPhoto
         case recognizing
-        case review
     }
 
     @Environment(CaptureStore.self) private var store
@@ -20,9 +19,8 @@ struct SnapCaptureView: View {
     @State private var scannerController = LiveTextScannerController()
     @State private var cameraReady = false
     @State private var isCapturing = false
-    @State private var draft = ""
-    /// Text from earlier snaps, kept when the user taps Snap More.
-    @State private var earlierText = ""
+    /// Shown over the camera when a snap found no text.
+    @State private var notice: String?
     @State private var photoItem: PhotosPickerItem?
     @State private var errorMessage: String?
     @State private var offerSettings = false
@@ -37,8 +35,6 @@ struct SnapCaptureView: View {
             case .recognizing:
                 ProgressView("Reading text…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case .review:
-                reviewScreen
             }
         }
         .onChange(of: photoItem) { _, item in
@@ -60,7 +56,7 @@ struct SnapCaptureView: View {
             }
         }
         .overlay(alignment: .topLeading) {
-            Button(action: backOut) {
+            Button { dismiss() } label: {
                 Image(systemName: "xmark")
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
@@ -69,6 +65,20 @@ struct SnapCaptureView: View {
             }
             .accessibilityLabel("Close")
             .padding()
+        }
+        .overlay(alignment: .top) {
+            if let notice {
+                Text(notice)
+                    .font(.callout.weight(.medium))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.black.opacity(0.6), in: Capsule())
+                    .padding(.top, 72)
+                    .padding(.horizontal, 24)
+                    .transition(.opacity)
+            }
         }
         .overlay(alignment: .bottom) {
             shutterButton
@@ -116,45 +126,7 @@ struct SnapCaptureView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", action: backOut)
-                }
-            }
-        }
-    }
-
-    private var reviewScreen: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                if draft.isEmpty {
-                    Text("No text found. Try again with the text in focus and well lit.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .padding()
-                }
-                TextEditor(text: $draft)
-                    .padding(.horizontal, 12)
-                Button(LiveTextScannerController.isSupported && !offerSettings ? "Snap More" : "Add Another Photo",
-                       systemImage: "plus.viewfinder") {
-                    earlierText = draft
-                    photoItem = nil
-                    errorMessage = nil
-                    phase = LiveTextScannerController.isSupported && !offerSettings ? .scanning : .choosingPhoto
-                }
-                .buttonStyle(.bordered)
-                .padding()
-            }
-            .navigationTitle("Review Text")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") {
-                        store.append(draft)
-                        dismiss()
-                    }
-                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
@@ -192,6 +164,7 @@ struct SnapCaptureView: View {
     private func snap() {
         guard !isCapturing else { return }
         isCapturing = true
+        notice = nil
         Task {
             defer { isCapturing = false }
             do {
@@ -199,7 +172,7 @@ struct SnapCaptureView: View {
                 let liveText = scannerController.liveText
                 phase = .recognizing
                 let text = try await TextRecognizer.recognize([photo])
-                showReview(text.isEmpty ? liveText : text)
+                add(text.isEmpty ? liveText : text, retryPhase: .scanning)
             } catch {
                 showPhotoFallback("Couldn't read text: \(error.localizedDescription)")
             }
@@ -214,28 +187,27 @@ struct SnapCaptureView: View {
             return
         }
         do {
-            showReview(try await TextRecognizer.recognize([image]))
+            add(try await TextRecognizer.recognize([image]), retryPhase: .choosingPhoto)
         } catch {
             showPhotoFallback("Couldn't read text: \(error.localizedDescription)")
         }
     }
 
-    private func showReview(_ newText: String) {
-        draft = [earlierText, newText]
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n\n")
-        phase = .review
-    }
-
-    /// Close/Cancel on the camera or photo screen: return to the review if
-    /// there's earlier text from this capture, otherwise close Snap.
-    private func backOut() {
-        if earlierText.isEmpty {
-            dismiss()
-        } else {
-            draft = earlierText
-            phase = .review
+    /// Adds the recognized text to the text-space and closes Snap. If nothing
+    /// was found, stays in Snap so the user can try again.
+    private func add(_ text: String, retryPhase: Phase) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            let message = "No text found. Try again with the text in focus and well lit."
+            if retryPhase == .scanning {
+                withAnimation { notice = message }
+            } else {
+                errorMessage = message
+                photoItem = nil
+            }
+            phase = retryPhase
+            return
         }
+        store.append(text)
+        dismiss()
     }
 }
