@@ -11,6 +11,12 @@ enum TextLayout {
         var box: CGRect
     }
 
+    /// The lines whose centre lies inside `region`, given as a fraction of the
+    /// image with the origin at the top-left (as on screen, unlike Vision).
+    static func lines(_ lines: [Line], centredIn region: CGRect) -> [Line] {
+        lines.filter { region.contains(CGPoint(x: $0.box.midX, y: 1 - $0.box.midY)) }
+    }
+
     /// Turns OCR lines (in Vision's reading order) back into paragraphs:
     /// - fragments from outside the main text column (e.g. the edge of a facing
     ///   page) are dropped;

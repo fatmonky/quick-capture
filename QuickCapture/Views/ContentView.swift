@@ -40,7 +40,6 @@ enum CaptureMode: String, Identifiable, CaseIterable {
 struct ContentView: View {
     @Environment(CaptureStore.self) private var store
     @State private var activeCapture: CaptureMode?
-    @State private var isConfirmingClear = false
     @State private var showCopied = false
     @State private var isEditing = false
 
@@ -66,15 +65,6 @@ struct ContentView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbarContent }
                 .sensoryFeedback(.success, trigger: store.appendCount)
-                .confirmationDialog(
-                    "Clear all captured text?",
-                    isPresented: $isConfirmingClear,
-                    titleVisibility: .visible
-                ) {
-                    Button("Clear", role: .destructive) { store.clear() }
-                } message: {
-                    Text("This can't be undone.")
-                }
                 .sheet(item: captureBinding(only: .speak)) { _ in
                     AudioCaptureSheet()
                 }
@@ -132,7 +122,7 @@ struct ContentView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             Button("Clear", systemImage: "trash", role: .destructive) {
-                isConfirmingClear = true
+                store.clear()
             }
             .disabled(store.text.isEmpty)
         }

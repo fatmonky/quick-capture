@@ -141,3 +141,26 @@ struct TextRecognizerOCRTests {
         #expect(text == "Page one\n\nPage two")
     }
 }
+
+struct CaptureRegionTests {
+    @Test func linesOutsideRegionAreDropped() {
+        // Vision boxes have a bottom-left origin; the region has a top-left origin.
+        let title = TextLayout.Line(text: "Title", box: CGRect(x: 0.3, y: 0.85, width: 0.4, height: 0.05))
+        let body = TextLayout.Line(text: "Body", box: CGRect(x: 0.1, y: 0.5, width: 0.8, height: 0.05))
+        let topBand = CGRect(x: 0.2, y: 0.05, width: 0.6, height: 0.15)
+        #expect(TextLayout.lines([title, body], centredIn: topBand) == [title])
+    }
+
+    @Test func viewRectMapsToCroppedImage() {
+        // A 3:4 portrait photo filling a taller 1:2 view: a sixth is cropped off each side.
+        let region = LiveTextScannerController.region(
+            of: CGRect(x: 0, y: 0, width: 100, height: 200),
+            inViewSized: CGSize(width: 100, height: 200),
+            aspectFilling: CGSize(width: 300, height: 400)
+        )
+        #expect(abs(region.minX - 1.0 / 6) < 0.001)
+        #expect(abs(region.width - 2.0 / 3) < 0.001)
+        #expect(region.minY == 0)
+        #expect(region.height == 1)
+    }
+}

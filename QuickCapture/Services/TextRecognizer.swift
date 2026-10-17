@@ -17,6 +17,18 @@ enum TextRecognizer {
         }.value
     }
 
+    /// Recognizes the text in one image, keeping only lines centred inside
+    /// `region` (a fraction of the image, origin top-left) when one is given.
+    static func recognize(_ image: UIImage, within region: CGRect?) async throws -> String {
+        try await Task.detached(priority: .userInitiated) {
+            var lines = try recognizeLines(in: image)
+            if let region {
+                lines = TextLayout.lines(lines, centredIn: region)
+            }
+            return TextLayout.assemble(lines)
+        }.value
+    }
+
     static func recognizeLines(in image: UIImage) throws -> [Line] {
         guard let cgImage = image.cgImage else { return [] }
 

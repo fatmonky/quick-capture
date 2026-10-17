@@ -2,9 +2,9 @@ import AVFoundation
 import PhotosUI
 import SwiftUI
 
-/// Snap capture: point the camera at text (framed live with yellow brackets),
-/// tap Capture Text, and the extracted text is added straight to the text-space,
-/// where it can be edited. Falls back to picking a photo where live text isn't supported.
+/// Snap capture: point the camera at text (framed live with yellow brackets;
+/// tap a block of text to frame just that), tap Capture Text, and the text inside
+/// the brackets is added straight to the text-space, where it can be edited. Falls back to picking a photo where live text isn't supported.
 struct SnapCaptureView: View {
     private enum Phase {
         case scanning
@@ -81,9 +81,23 @@ struct SnapCaptureView: View {
             }
         }
         .overlay(alignment: .bottom) {
-            shutterButton
-                .padding(.bottom, 24)
+            VStack(spacing: 12) {
+                if cameraReady {
+                    Text(scannerController.isFocused
+                         ? "Tap the text again to capture everything"
+                         : "Tap a block of text to capture just that")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(.black.opacity(0.5), in: Capsule())
+                        .allowsHitTesting(false)
+                }
+                shutterButton
+            }
+            .padding(.bottom, 24)
         }
+        .sensoryFeedback(.selection, trigger: scannerController.focusedItemID)
         .task { await prepareCamera() }
     }
 
@@ -159,8 +173,9 @@ struct SnapCaptureView: View {
         phase = .choosingPhoto
     }
 
-    /// Captures a still and reads it with full-accuracy OCR. If that finds
-    /// nothing, falls back to whatever the viewfinder was recognizing live.
+    /// Captures a still and reads the bracketed part of it with full-accuracy OCR.
+    /// If that finds nothing, falls back to what the viewfinder was recognizing
+    /// live inside the brackets.
     private func snap() {
         guard !isCapturing else { return }
         isCapturing = true
@@ -169,9 +184,10 @@ struct SnapCaptureView: View {
             defer { isCapturing = false }
             do {
                 let photo = try await scannerController.capturePhoto()
+                let region = scannerController.bracketedRegion(ofPhotoSized: photo.size)
                 let liveText = scannerController.liveText
                 phase = .recognizing
-                let text = try await TextRecognizer.recognize([photo])
+                let text = try await TextRecognizer.recognize(photo, within: region)
                 add(text.isEmpty ? liveText : text, retryPhase: .scanning)
             } catch {
                 showPhotoFallback("Couldn't read text: \(error.localizedDescription)")
