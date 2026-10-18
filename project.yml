@@ -27,6 +27,7 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_CFBundleDisplayName: Quick Capture
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         INFOPLIST_KEY_NSCameraUsageDescription: Quick Capture uses the camera to snap printed text and turn it into notes.
         INFOPLIST_KEY_NSMicrophoneUsageDescription: Quick Capture uses the microphone to transcribe what you say into notes.
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Quick Capture converts your speech to text on your device.

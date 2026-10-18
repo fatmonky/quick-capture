@@ -1,0 +1,1 @@
+notes,dictation,speech to text,scan text,OCR,camera text,transcribe,jot,memo,quick note,capture
