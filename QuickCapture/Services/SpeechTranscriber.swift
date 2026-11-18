@@ -6,6 +6,8 @@ import Speech
 ///
 /// Recognition tasks end on their own after long pauses or about a minute of audio,
 /// so while recording, each finished task's text is kept and a fresh task is started.
+/// Within a task, the recognizer can also start a new utterance after a pause: its
+/// results then hold only the new words, so the earlier text is kept before moving on.
 @MainActor
 @Observable
 final class SpeechTranscriber {
@@ -26,6 +28,7 @@ final class SpeechTranscriber {
     @ObservationIgnored private var rapidFailures = 0
     @ObservationIgnored private var segments: [String] = []
     @ObservationIgnored private var partial = ""
+    @ObservationIgnored private var partialEndedUtterance = false
 
     /// Joins finished segments and the in-progress partial result into one transcript.
     nonisolated static func combine(_ segments: [String], partial: String) -> String {
@@ -33,6 +36,25 @@ final class SpeechTranscriber {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: " ")
+    }
+
+    /// Whether `next` is a revision of the in-progress `previous` result, rather than
+    /// the start of a new utterance (which means `previous` must be kept).
+    nonisolated static func isRevision(of previous: String, by next: String,
+                                       previousEndedUtterance: Bool) -> Bool {
+        let old = words(previous), new = words(next)
+        guard !old.isEmpty else { return true }
+        if new.starts(with: old) { return true }
+        if previousEndedUtterance { return false }
+        // The recognizer often rewords a result as it hears more, but keeps its
+        // opening. A longer result followed by one that starts differently is a reset.
+        return old.first == new.first || old.count < 3
+    }
+
+    private nonisolated static func words(_ text: String) -> [String] {
+        text.lowercased()
+            .split(whereSeparator: { !$0.isLetter && !$0.isNumber && $0 != "'" })
+            .map(String.init)
     }
 
     func requestAuthorization() async -> Authorization {
@@ -113,20 +135,26 @@ final class SpeechTranscriber {
         task = recognizer.recognitionTask(with: request) { [weak self] result, error in
             let text = result?.bestTranscription.formattedString
             let isFinal = result?.isFinal ?? false
+            let endsUtterance = result?.speechRecognitionMetadata != nil
             let failed = error != nil
             Task { @MainActor in
-                self?.handle(text: text, isFinal: isFinal, failed: failed, from: request)
+                self?.handle(text: text, isFinal: isFinal, endsUtterance: endsUtterance,
+                             failed: failed, from: request)
             }
         }
     }
 
-    private func handle(text: String?, isFinal: Bool, failed: Bool,
+    private func handle(text: String?, isFinal: Bool, endsUtterance: Bool, failed: Bool,
                         from request: SFSpeechAudioBufferRecognitionRequest) {
         // Ignore late callbacks from a task we've already moved on from.
         guard isRecording, request === requestBox.request else { return }
 
         if let text {
+            if !Self.isRevision(of: partial, by: text, previousEndedUtterance: partialEndedUtterance) {
+                commitPartial()
+            }
             partial = text
+            partialEndedUtterance = endsUtterance
             updateTranscript()
         }
         guard isFinal || failed else { return }
@@ -156,6 +184,7 @@ final class SpeechTranscriber {
             segments.append(partial)
         }
         partial = ""
+        partialEndedUtterance = false
         updateTranscript()
     }
 
