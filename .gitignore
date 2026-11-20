@@ -14,3 +14,7 @@ fastlane/report.xml
 fastlane/README.md
 *.ipa
 *.dSYM.zip
+
+# App Review contact details (kept private)
+fastlane/metadata/review_information/phone_number.txt
+fastlane/metadata/review_information/email_address.txt

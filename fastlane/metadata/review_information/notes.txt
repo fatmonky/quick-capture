@@ -1,0 +1,1 @@
+No account or sign-in is needed. Speak uses the microphone and on-device speech recognition; Snap uses the camera and on-device text recognition (try it on any printed page). The note is stored only on the device; nothing is sent to a server.

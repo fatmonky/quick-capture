@@ -20,5 +20,6 @@
   "ageAssurance": false,
   "userGeneratedContent": false,
   "healthOrWellnessTopics": false,
-  "advertising": false
+  "advertising": false,
+  "socialMedia": false
 }
