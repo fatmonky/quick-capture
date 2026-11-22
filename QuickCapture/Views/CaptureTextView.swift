@@ -55,22 +55,40 @@ struct CaptureTextView: UIViewRepresentable {
     }
 
     /// Quotes (lines starting with `>`) are in italics and a softer colour, with the
-    /// `>` marker faded; everything else is plain. Only attributes change, so the
-    /// cursor stays put.
+    /// `>` marker faded; everything else is plain. Highlights are yellow, with their
+    /// `==` markers faded. Only attributes change, so the cursor stays put.
     static func style(_ textView: UITextView) {
         let body = UIFont.preferredFont(forTextStyle: .body)
         let plain: [NSAttributedString.Key: Any] = [.font: body, .foregroundColor: UIColor.label]
         let storage = textView.textStorage
         storage.beginEditing()
         storage.setAttributes(plain, range: NSRange(location: 0, length: storage.length))
-        for line in NoteFormat.lineRanges(in: storage.string) where line.isQuote {
-            storage.addAttributes([.font: body.withTraits(.traitItalic),
-                                   .foregroundColor: UIColor.secondaryLabel], range: line.range)
-            storage.addAttribute(.foregroundColor, value: UIColor.tertiaryLabel,
-                                 range: NSRange(location: line.range.location, length: line.markerLength))
+        let string = storage.string as NSString
+        for line in NoteFormat.lineRanges(in: storage.string) {
+            if line.isQuote {
+                storage.addAttributes([.font: body.withTraits(.traitItalic),
+                                       .foregroundColor: UIColor.secondaryLabel], range: line.range)
+                storage.addAttribute(.foregroundColor, value: UIColor.tertiaryLabel,
+                                     range: NSRange(location: line.range.location, length: line.markerLength))
+            }
+            for span in Highlights.parse(string.substring(with: line.range)).written {
+                let offset = line.range.location
+                storage.addAttributes([.backgroundColor: highlightColor, .foregroundColor: UIColor.label],
+                                      range: NSRange(location: offset + span.text.location, length: span.text.length))
+                for marker in [span.open, span.close] {
+                    storage.addAttribute(.foregroundColor, value: UIColor.quaternaryLabel,
+                                         range: NSRange(location: offset + marker.location, length: marker.length))
+                }
+            }
         }
         storage.endEditing()
         textView.typingAttributes = plain
+    }
+
+    static let highlightColor = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 1, green: 0.84, blue: 0.04, alpha: 0.4)
+            : UIColor(red: 1, green: 0.894, blue: 0.361, alpha: 1)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
@@ -92,6 +110,48 @@ struct CaptureTextView: UIViewRepresentable {
 
         func textViewDidEndEditing(_ textView: UITextView) {
             if parent.isEditing { parent.isEditing = false }
+        }
+
+        /// Select text to highlight it (and add a note); with the cursor or selection
+        /// on a highlight, add a note to it or remove it.
+        func textView(_ textView: UITextView, editMenuForTextIn range: NSRange,
+                      suggestedActions: [UIMenuElement]) -> UIMenu? {
+            let text = textView.text ?? ""
+            var actions: [UIMenuElement] = []
+            if Highlights.isHighlighted(text, selection: range) {
+                actions = [
+                    UIAction(title: "Add Note", image: UIImage(systemName: "note.text.badge.plus")) { [weak self] _ in
+                        self?.apply(Highlights.addNote(text, at: NSMaxRange(range)), to: textView)
+                    },
+                    UIAction(title: "Remove Highlight", image: UIImage(systemName: "highlighter"),
+                             attributes: .destructive) { [weak self] _ in
+                        if let edit = Highlights.removeHighlights(text, selection: range) { self?.apply(edit, to: textView) }
+                    },
+                ]
+            } else if range.length > 0, let edit = Highlights.highlight(text, selection: range) {
+                actions = [
+                    UIAction(title: "Highlight", image: UIImage(systemName: "highlighter")) { [weak self] _ in
+                        self?.apply(edit, to: textView)
+                    },
+                    UIAction(title: "Highlight & Note", image: UIImage(systemName: "note.text.badge.plus")) { [weak self] _ in
+                        self?.apply(Highlights.addNote(edit.text, at: edit.cursor), to: textView)
+                    },
+                ]
+            }
+            guard !actions.isEmpty else { return nil }
+            return UIMenu(children: [UIMenu(options: .displayInline, children: actions)] + suggestedActions)
+        }
+
+        private func apply(_ edit: Highlights.Edit, to textView: UITextView) {
+            // As a text input edit, so it can be undone (shake, or three-finger swipe).
+            if let all = textView.textRange(from: textView.beginningOfDocument, to: textView.endOfDocument) {
+                textView.replace(all, withText: edit.text)
+            }
+            textView.selectedRange = NSRange(location: edit.cursor, length: 0)
+            CaptureTextView.style(textView)
+            parent.text = textView.text
+            if !textView.isFirstResponder { textView.becomeFirstResponder() }
+            textView.scrollRangeToVisible(textView.selectedRange)
         }
     }
 }

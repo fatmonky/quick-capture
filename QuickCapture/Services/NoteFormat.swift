@@ -135,7 +135,7 @@ enum MarkdownFormatter {
 }
 
 /// Formats the page as rich text for Apple Notes, which doesn't read Markdown:
-/// quotes are indented and in italics, and notes are plain.
+/// quotes are indented and in italics, highlights are marked, and notes are plain.
 enum RichTextFormatter {
     static func note(page: String, title: String) -> NSAttributedString {
         let result = NSMutableAttributedString()
@@ -154,14 +154,25 @@ enum RichTextFormatter {
             .split(separator: "\n", omittingEmptySubsequences: false)
         for (index, line) in lines.enumerated() {
             let ending = index == lines.count - 1 ? "" : "\n"
-            if NoteFormat.isQuote(line) {
-                result.append(NSAttributedString(string: NoteFormat.unquoted(line) + ending, attributes: [
-                    .font: body.withTraits(.traitItalic),
-                    .paragraphStyle: quoteStyle,
-                ]))
-            } else {
-                result.append(NSAttributedString(string: String(line) + ending, attributes: [.font: body]))
-            }
+            let parsed = Highlights.parse(line)
+            let attributes: [NSAttributedString.Key: Any] = NoteFormat.isQuote(line)
+                ? [.font: body.withTraits(.traitItalic), .paragraphStyle: quoteStyle]
+                : [.font: body]
+            result.append(Highlights.attributed(parsed, attributes: attributes, highlight: PDFExporter.highlight))
+            result.append(NSAttributedString(string: ending, attributes: attributes))
+        }
+        return result
+    }
+}
+
+extension Highlights {
+    /// A line's text, without markers, with `highlight` added to the highlighted parts.
+    static func attributed(_ line: Line, attributes: [NSAttributedString.Key: Any],
+                           highlight: UIColor) -> NSMutableAttributedString {
+        let result = NSMutableAttributedString(string: line.content, attributes: attributes)
+        for range in line.highlights {
+            result.addAttribute(.backgroundColor, value: highlight,
+                                range: NSRange(location: range.lowerBound, length: range.count))
         }
         return result
     }

@@ -45,6 +45,10 @@ enum ExportDestination: Identifiable {
     case markdownFile
     /// Rich text for Apple Notes, through the share sheet.
     case notes
+    /// An A4 PDF, through the share sheet.
+    case pdf
+    /// The highlights as a WhatsApp message.
+    case whatsApp
 
     var id: Self { self }
 }
@@ -61,6 +65,7 @@ struct ContentView: View {
     /// The folder is being chosen as part of saving, so save once it's chosen.
     @State private var saveAfterChoosingFolder = false
     @State private var shareItem: ShareItem?
+    @State private var showingWhatsApp = false
     /// A note the folder wouldn't take, which can go through the share sheet instead.
     @State private var unsavedNote: MarkdownNote?
     @State private var savedMessage: String?
@@ -99,10 +104,13 @@ struct ContentView: View {
                         .presentationDetents([.medium, .large])
                         .ignoresSafeArea()
                 }
+                .sheet(isPresented: $showingWhatsApp) {
+                    WhatsAppExportView(page: store.text, title: exportTitle)
+                }
                 .alert("Title", isPresented: .constant(pendingExport != nil), presenting: pendingExport) { destination in
                     TextField("Book or topic", text: $exportTitle)
                     Button("Cancel", role: .cancel) { pendingExport = nil }
-                    Button(destination == .markdownFolder ? "Save" : "Share") {
+                    Button(destination == .markdownFolder ? "Save" : destination == .whatsApp ? "Next" : "Share") {
                         pendingExport = nil
                         export(to: destination)
                     }
@@ -231,6 +239,8 @@ struct ContentView: View {
             }
             Button("Share Markdown File", systemImage: "doc.text") { pendingExport = .markdownFile }
             Button("Share to Notes", systemImage: "note.text") { pendingExport = .notes }
+            Button("Share PDF", systemImage: "doc.richtext") { pendingExport = .pdf }
+            Button("Send to WhatsApp", systemImage: "message") { pendingExport = .whatsApp }
             Divider()
             Button("Choose Markdown Folder…", systemImage: "folder.badge.gearshape") { choosingFolder = true }
         } label: {
@@ -259,6 +269,14 @@ struct ContentView: View {
             shareMarkdownFile(MarkdownFormatter.note(page: store.text, title: exportTitle))
         case .notes:
             shareItem = ShareItem(items: [RichTextFormatter.note(page: store.text, title: exportTitle)])
+        case .pdf:
+            do {
+                shareItem = ShareItem(items: [try PDFExporter.temporaryFile(page: store.text, title: exportTitle)])
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        case .whatsApp:
+            showingWhatsApp = true
         }
     }
 
