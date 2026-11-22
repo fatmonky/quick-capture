@@ -3,13 +3,21 @@ import PhotosUI
 import SwiftUI
 
 /// Snap capture: point the camera at text (framed live with yellow brackets;
-/// tap a block of text to frame just that), tap Capture Text, and the text inside
-/// the brackets is added straight to the text-space, where it can be edited. Falls back to picking a photo where live text isn't supported.
+/// tap a block of text to frame just that) and tap Capture Text. The photo then
+/// shows the text inside the brackets, to pick paragraphs or lines from and add a
+/// note on. The passage goes on the page as a quote, with the note under it.
+/// Falls back to picking a photo where live text isn't supported.
 struct SnapCaptureView: View {
     private enum Phase {
         case scanning
         case choosingPhoto
         case recognizing
+        case reviewing(UIImage, TextLayout.Page, retake: Retake)
+    }
+
+    /// Where Retake goes back to.
+    private enum Retake {
+        case camera, photos
     }
 
     @Environment(CaptureStore.self) private var store
@@ -35,6 +43,16 @@ struct SnapCaptureView: View {
             case .recognizing:
                 ProgressView("Reading text…")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case let .reviewing(photo, page, retake):
+                SnapReviewView(photo: photo, page: page) {
+                    notice = nil
+                    photoItem = nil
+                    phase = retake == .camera ? .scanning : .choosingPhoto
+                } onAdd: { passage, note in
+                    store.append(NoteFormat.snap(passage: passage, note: note))
+                    dismiss()
+                }
+                .preferredColorScheme(.dark)
             }
         }
         .onChange(of: photoItem) { _, item in
@@ -173,9 +191,9 @@ struct SnapCaptureView: View {
         phase = .choosingPhoto
     }
 
-    /// Captures a still and reads the bracketed part of it with full-accuracy OCR.
-    /// If that finds nothing, falls back to what the viewfinder was recognizing
-    /// live inside the brackets.
+    /// Captures a still and reads the bracketed part of it with full-accuracy OCR,
+    /// then shows it to pick from. If that finds nothing, adds what the viewfinder
+    /// was recognizing live inside the brackets.
     private func snap() {
         guard !isCapturing else { return }
         isCapturing = true
@@ -187,8 +205,16 @@ struct SnapCaptureView: View {
                 let region = scannerController.bracketedRegion(ofPhotoSized: photo.size)
                 let liveText = scannerController.liveText
                 phase = .recognizing
-                let text = try await TextRecognizer.recognize(photo, within: region)
-                add(text.isEmpty ? liveText : text, retryPhase: .scanning)
+                let page = try await TextRecognizer.page(in: photo, within: region)
+                if !page.isEmpty {
+                    phase = .reviewing(photo, page, retake: .camera)
+                } else if !liveText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    store.append(NoteFormat.snap(passage: liveText))
+                    dismiss()
+                } else {
+                    withAnimation { notice = Self.noTextMessage }
+                    phase = .scanning
+                }
             } catch {
                 showPhotoFallback("Couldn't read text: \(error.localizedDescription)")
             }
@@ -203,27 +229,18 @@ struct SnapCaptureView: View {
             return
         }
         do {
-            add(try await TextRecognizer.recognize([image]), retryPhase: .choosingPhoto)
+            let page = try await TextRecognizer.page(in: image, within: nil)
+            if page.isEmpty {
+                errorMessage = Self.noTextMessage
+                photoItem = nil
+                phase = .choosingPhoto
+            } else {
+                phase = .reviewing(image, page, retake: .photos)
+            }
         } catch {
             showPhotoFallback("Couldn't read text: \(error.localizedDescription)")
         }
     }
 
-    /// Adds the recognized text to the text-space and closes Snap. If nothing
-    /// was found, stays in Snap so the user can try again.
-    private func add(_ text: String, retryPhase: Phase) {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            let message = "No text found. Try again with the text in focus and well lit."
-            if retryPhase == .scanning {
-                withAnimation { notice = message }
-            } else {
-                errorMessage = message
-                photoItem = nil
-            }
-            phase = retryPhase
-            return
-        }
-        store.append(text)
-        dismiss()
-    }
+    private static let noTextMessage = "No text found. Try again with the text in focus and well lit."
 }

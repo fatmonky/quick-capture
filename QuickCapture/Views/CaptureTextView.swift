@@ -2,7 +2,8 @@ import SwiftUI
 import UIKit
 
 /// The editable text-space. Wraps `UITextView` so the app can scroll to the
-/// newest capture after each append, which SwiftUI's `TextEditor` can't do.
+/// newest capture after each append, which SwiftUI's `TextEditor` can't do,
+/// and so snapped quotes can look different from your own notes.
 struct CaptureTextView: UIViewRepresentable {
     @Binding var text: String
     @Binding var isEditing: Bool
@@ -20,6 +21,7 @@ struct CaptureTextView: UIViewRepresentable {
         textView.alwaysBounceVertical = true
         textView.keyboardDismissMode = .interactive
         textView.text = text
+        Self.style(textView)
         context.coordinator.lastScrollTrigger = scrollToEndTrigger
         return textView
     }
@@ -29,6 +31,7 @@ struct CaptureTextView: UIViewRepresentable {
 
         if textView.text != text {
             textView.text = text
+            Self.style(textView)
         }
 
         // Change focus after this SwiftUI update finishes. Dismissing the
@@ -51,6 +54,25 @@ struct CaptureTextView: UIViewRepresentable {
         }
     }
 
+    /// Quotes (lines starting with `>`) are in italics and a softer colour, with the
+    /// `>` marker faded; everything else is plain. Only attributes change, so the
+    /// cursor stays put.
+    static func style(_ textView: UITextView) {
+        let body = UIFont.preferredFont(forTextStyle: .body)
+        let plain: [NSAttributedString.Key: Any] = [.font: body, .foregroundColor: UIColor.label]
+        let storage = textView.textStorage
+        storage.beginEditing()
+        storage.setAttributes(plain, range: NSRange(location: 0, length: storage.length))
+        for line in NoteFormat.lineRanges(in: storage.string) where line.isQuote {
+            storage.addAttributes([.font: body.withTraits(.traitItalic),
+                                   .foregroundColor: UIColor.secondaryLabel], range: line.range)
+            storage.addAttribute(.foregroundColor, value: UIColor.tertiaryLabel,
+                                 range: NSRange(location: line.range.location, length: line.markerLength))
+        }
+        storage.endEditing()
+        textView.typingAttributes = plain
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
     final class Coordinator: NSObject, UITextViewDelegate {
@@ -60,6 +82,7 @@ struct CaptureTextView: UIViewRepresentable {
         init(parent: CaptureTextView) { self.parent = parent }
 
         func textViewDidChange(_ textView: UITextView) {
+            CaptureTextView.style(textView)
             parent.text = textView.text
         }
 

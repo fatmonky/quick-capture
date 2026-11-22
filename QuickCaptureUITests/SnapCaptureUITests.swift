@@ -20,7 +20,7 @@ final class SnapCaptureUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Snap"].waitForExistence(timeout: 3))
     }
 
-    func testPickingPhotoAddsTextDirectly() throws {
+    func testPickingPhotoAddsQuoteAndNote() throws {
         app.buttons["Snap"].tap()
         app.buttons["Choose from Photos"].tap()
 
@@ -33,8 +33,19 @@ final class SnapCaptureUITests: XCTestCase {
         sleep(2)
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.17, dy: 0.455)).tap()
 
-        // The recognized text goes straight into the text-space; there's no review step.
-        XCTAssertTrue(app.buttons["Speak"].waitForExistence(timeout: 20))
+        // The photo comes back to pick from; with nothing picked, Add All adds it all.
+        let addAll = app.buttons["Add All"]
+        XCTAssertTrue(addAll.waitForExistence(timeout: 20))
+        let note = app.textFields["snapNote"]
+        note.tap()
+        note.typeText("My note")
+        let review = XCTAttachment(screenshot: app.screenshot())
+        review.name = "snap-review"
+        review.lifetime = .keepAlways
+        add(review)
+        addAll.tap()
+
+        XCTAssertTrue(app.buttons["Speak"].waitForExistence(timeout: 5))
         let editor = app.textViews.firstMatch
         let filled = NSPredicate(format: "value != ''")
         wait(for: [expectation(for: filled, evaluatedWith: editor)], timeout: 5)
@@ -43,6 +54,7 @@ final class SnapCaptureUITests: XCTestCase {
         textAttachment.name = "recognized-text"
         textAttachment.lifetime = .keepAlways
         add(textAttachment)
-        XCTAssertFalse(recognized.isEmpty)
+        XCTAssertTrue(recognized.hasPrefix("> "), "The passage is added as a quote")
+        XCTAssertTrue(recognized.hasSuffix("\n\nMy note"), "The note goes under the passage")
     }
 }

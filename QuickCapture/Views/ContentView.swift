@@ -37,11 +37,34 @@ enum CaptureMode: String, Identifiable, CaseIterable {
     }
 }
 
+/// Where the page can be exported to.
+enum ExportDestination: Identifiable {
+    /// A Markdown note in the chosen folder, such as an Obsidian inbox.
+    case markdownFolder
+    /// A Markdown file, through the share sheet.
+    case markdownFile
+    /// Rich text for Apple Notes, through the share sheet.
+    case notes
+
+    var id: Self { self }
+}
+
 struct ContentView: View {
     @Environment(CaptureStore.self) private var store
     @State private var activeCapture: CaptureMode?
     @State private var showCopied = false
     @State private var isEditing = false
+    /// Waiting for a title before exporting.
+    @State private var pendingExport: ExportDestination?
+    @AppStorage("exportTitle") private var exportTitle = ""
+    @State private var choosingFolder = false
+    /// The folder is being chosen as part of saving, so save once it's chosen.
+    @State private var saveAfterChoosingFolder = false
+    @State private var shareItem: ShareItem?
+    /// A note the folder wouldn't take, which can go through the share sheet instead.
+    @State private var unsavedNote: MarkdownNote?
+    @State private var savedMessage: String?
+    @State private var errorMessage: String?
 
     var body: some View {
         @Bindable var store = store
@@ -70,6 +93,64 @@ struct ContentView: View {
                 }
                 .fullScreenCover(item: captureBinding(only: .snap)) { _ in
                     SnapCaptureView()
+                }
+                .sheet(item: $shareItem) { item in
+                    ActivityView(items: item.items)
+                        .presentationDetents([.medium, .large])
+                        .ignoresSafeArea()
+                }
+                .alert("Title", isPresented: .constant(pendingExport != nil), presenting: pendingExport) { destination in
+                    TextField("Book or topic", text: $exportTitle)
+                    Button("Cancel", role: .cancel) { pendingExport = nil }
+                    Button(destination == .markdownFolder ? "Save" : "Share") {
+                        pendingExport = nil
+                        export(to: destination)
+                    }
+                } message: { _ in
+                    Text("Used as the note's heading and file name.")
+                }
+                .fileImporter(isPresented: $choosingFolder, allowedContentTypes: [.folder]) { result in
+                    do {
+                        try MarkdownFolder.remember(result.get())
+                        if saveAfterChoosingFolder {
+                            saveToFolder()
+                        } else {
+                            savedMessage = "Markdown notes will be saved to \(MarkdownFolder.current?.lastPathComponent ?? "that folder")"
+                        }
+                    } catch {
+                        errorMessage = error.localizedDescription
+                    }
+                    saveAfterChoosingFolder = false
+                }
+                .alert("Couldn't save to the folder", isPresented: .constant(unsavedNote != nil), presenting: unsavedNote) { note in
+                    Button("Share Instead") { shareMarkdownFile(note) }
+                    Button("Cancel", role: .cancel) { unsavedNote = nil }
+                } message: { _ in
+                    Text("Share the note to another app, or choose the folder again from the Export menu.")
+                }
+                .alert("Something went wrong", isPresented: .constant(errorMessage != nil)) {
+                    Button("OK") { errorMessage = nil }
+                } message: {
+                    Text(errorMessage ?? "")
+                }
+                .overlay(alignment: .top) {
+                    if let savedMessage {
+                        Text(savedMessage)
+                            .font(.callout.weight(.medium))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(.regularMaterial, in: Capsule())
+                            .padding(.top, 8)
+                            .padding(.horizontal)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                }
+                .animation(.default, value: savedMessage)
+                .sensoryFeedback(.success, trigger: savedMessage) { _, message in message != nil }
+                .task(id: savedMessage) {
+                    guard savedMessage != nil else { return }
+                    try? await Task.sleep(for: .seconds(2.5))
+                    if !Task.isCancelled { savedMessage = nil }
                 }
         }
     }
@@ -137,12 +218,25 @@ struct ContentView: View {
                 }
                 .disabled(store.text.isEmpty)
 
-                ShareLink(item: store.text, subject: Text("Quick Capture")) {
-                    Label("Export", systemImage: "square.and.arrow.up")
-                }
-                .disabled(store.text.isEmpty)
+                exportMenu
             }
         }
+    }
+
+    private var exportMenu: some View {
+        Menu {
+            Button(MarkdownFolder.current.map { "Save to \($0.lastPathComponent)" } ?? "Save as Markdown",
+                   systemImage: "folder") {
+                pendingExport = .markdownFolder
+            }
+            Button("Share Markdown File", systemImage: "doc.text") { pendingExport = .markdownFile }
+            Button("Share to Notes", systemImage: "note.text") { pendingExport = .notes }
+            Divider()
+            Button("Choose Markdown Folder…", systemImage: "folder.badge.gearshape") { choosingFolder = true }
+        } label: {
+            Label("Export", systemImage: "square.and.arrow.up")
+        }
+        .disabled(store.text.isEmpty)
     }
 
     // MARK: - Presentation
@@ -156,6 +250,45 @@ struct ContentView: View {
     }
 
     // MARK: - Actions
+
+    private func export(to destination: ExportDestination) {
+        switch destination {
+        case .markdownFolder:
+            saveToFolder()
+        case .markdownFile:
+            shareMarkdownFile(MarkdownFormatter.note(page: store.text, title: exportTitle))
+        case .notes:
+            shareItem = ShareItem(items: [RichTextFormatter.note(page: store.text, title: exportTitle)])
+        }
+    }
+
+    /// Adds the page to the Markdown folder as a new note, asking for the folder the first time.
+    private func saveToFolder() {
+        guard let folder = MarkdownFolder.current else {
+            saveAfterChoosingFolder = true
+            choosingFolder = true
+            return
+        }
+        let note = MarkdownFormatter.note(page: store.text, title: exportTitle)
+        Task {
+            do {
+                // Another app's folder can take a while to answer.
+                try await Task.detached { try MarkdownFolder.save(note, in: folder) }.value
+                savedMessage = "Saved to \(folder.lastPathComponent)"
+            } catch {
+                unsavedNote = note
+            }
+        }
+    }
+
+    private func shareMarkdownFile(_ note: MarkdownNote) {
+        unsavedNote = nil
+        do {
+            shareItem = ShareItem(items: [try MarkdownFolder.temporaryFile(for: note)])
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
 
     private func copyAll() {
         UIPasteboard.general.string = store.text

@@ -12,6 +12,34 @@ struct TextLayoutTests {
         return .init(text: text, box: CGRect(x: 0.1, y: maxY - height, width: width, height: height))
     }
 
+    /// Two paragraphs: rows 0–1 wrap into one, row 2 ends short, row 3 starts the next.
+    private var twoParagraphs: TextLayout.Page {
+        TextLayout.page([
+            line("The quick brown fox", row: 0),
+            line("jumps over the lazy", row: 1),
+            line("dog.", row: 2, width: 0.3),
+            line("A second paragraph", row: 3),
+        ])
+    }
+
+    @Test func pageGroupsRowsIntoParagraphs() {
+        #expect(twoParagraphs.paragraphs == [0..<3, 3..<4])
+        #expect(twoParagraphs.breaks == [.wrap, .wrap, .line])
+    }
+
+    @Test func pickedRowsJoinAsOnThePage() {
+        #expect(TextLayout.text(of: twoParagraphs, rows: [1, 2]) == "jumps over the lazy dog.")
+        #expect(TextLayout.text(of: twoParagraphs, rows: [2, 3]) == "dog.\nA second paragraph")
+    }
+
+    @Test func rowsApartOnThePageGetABlankLine() {
+        #expect(TextLayout.text(of: twoParagraphs, rows: [0, 3]) == "The quick brown fox\n\nA second paragraph")
+    }
+
+    @Test func noPickMeansTheWholePage() {
+        #expect(TextLayout.text(of: twoParagraphs) == TextLayout.text(of: twoParagraphs, rows: [0, 1, 2, 3]))
+    }
+
     @Test func emptyInputGivesEmptyString() {
         #expect(TextLayout.assemble([]) == "")
     }

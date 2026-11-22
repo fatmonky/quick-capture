@@ -30,14 +30,51 @@ enum TextLayout {
     /// Spacing is judged from line *centres*, since on a tilted or curved page
     /// neighbouring line boxes often overlap.
     static func assemble(_ rawLines: [Line]) -> String {
+        text(of: page(rawLines))
+    }
+
+    /// How one printed line leads on to the next.
+    enum Break: Equatable {
+        /// The same paragraph wraps onto the next line.
+        case wrap
+        /// A new paragraph starts on the next line.
+        case line
+        /// A gap, or a jump back up the page: a blank line in the text.
+        case paragraph
+    }
+
+    /// The printed lines of a page, in reading order, and how each leads to the next.
+    struct Page: Equatable {
+        var rows: [Line] = []
+        /// `breaks[i]` sits between `rows[i]` and `rows[i + 1]`.
+        var breaks: [Break] = []
+
+        var isEmpty: Bool { rows.isEmpty }
+
+        /// The rows of each paragraph, top to bottom.
+        var paragraphs: [Range<Int>] {
+            guard !rows.isEmpty else { return [] }
+            var result: [Range<Int>] = []
+            var start = 0
+            for (index, lineBreak) in breaks.enumerated() where lineBreak != .wrap {
+                result.append(start..<index + 1)
+                start = index + 1
+            }
+            result.append(start..<rows.count)
+            return result
+        }
+    }
+
+    /// Cleans up OCR lines and works out how they flow into paragraphs (see `assemble`).
+    static func page(_ rawLines: [Line]) -> Page {
         let cleaned = rawLines
             .map { Line(text: $0.text.trimmingCharacters(in: .whitespaces), box: $0.box) }
             .filter { !$0.text.isEmpty }
-        guard !cleaned.isEmpty else { return "" }
+        guard !cleaned.isEmpty else { return Page() }
 
         let column = Column(of: cleaned)
         let rows = mergeSplitRows(cleaned.filter { !column.isStrayFragment($0) })
-        guard let first = rows.first else { return "" }
+        guard !rows.isEmpty else { return Page() }
 
         let lineHeight = median(rows.map(\.box.height))
         let steps = zip(rows, rows.dropFirst())
@@ -47,18 +84,36 @@ enum TextLayout {
         // with only a few, widely spaced lines from treating big gaps as normal.
         let lineStep = min(steps.isEmpty ? lineHeight * 1.2 : median(steps), lineHeight * 1.4)
 
-        var result = first.text
-        for (previous, line) in zip(rows, rows.dropFirst()) {
+        let breaks = zip(rows, rows.dropFirst()).map { previous, line -> Break in
             let step = previous.box.midY - line.box.midY
             let endedShort = previous.box.maxX < column.right - column.width * 0.12
             let indented = line.box.minX - previous.box.minX > lineHeight * 0.6
 
             if step < lineHeight * 0.3 || step > lineStep * 1.6 {
-                result += "\n\n" + line.text
+                return .paragraph
             } else if endedShort || indented {
-                result += "\n" + line.text
+                return .line
             } else {
-                result = joinWrapped(result, line.text)
+                return .wrap
+            }
+        }
+        return Page(rows: rows, breaks: breaks)
+    }
+
+    /// The text of the page, or of just the `selected` rows. Rows that aren't next
+    /// to each other on the page are separated by a blank line.
+    static func text(of page: Page, rows selected: Set<Int>? = nil) -> String {
+        let indices = (selected.map { $0.sorted() } ?? Array(page.rows.indices))
+            .filter { page.rows.indices.contains($0) }
+        guard let first = indices.first else { return "" }
+
+        var result = page.rows[first].text
+        for (previous, index) in zip(indices, indices.dropFirst()) {
+            let text = page.rows[index].text
+            switch index == previous + 1 ? page.breaks[previous] : .paragraph {
+            case .paragraph: result += "\n\n" + text
+            case .line: result += "\n" + text
+            case .wrap: result = joinWrapped(result, text)
             }
         }
         return result
