@@ -1,1 +1,1 @@
-No account or sign-in is needed. Speak uses the microphone and on-device speech recognition; Snap uses the camera and on-device text recognition (try it on any printed page). The note is stored only on the device; nothing is sent to a server.
+No account or sign-in is needed. Snap uses the camera and on-device text recognition (try it on any printed page): tap paragraphs to pick them, then Add. On the page, select text and tap Highlight or Highlight & Note. Export offers Markdown, Notes, PDF and WhatsApp. The note is stored only on the device; nothing is sent to a server.

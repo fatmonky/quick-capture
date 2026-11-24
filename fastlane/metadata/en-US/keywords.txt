@@ -1,1 +1,1 @@
-notes,dictation,speech to text,scan text,OCR,camera text,transcribe,jot,memo,quick note,capture
+reading notes,book notes,highlight,annotate,scan text,OCR,quotes,PDF,Obsidian,markdown,camera,study

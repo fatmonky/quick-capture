@@ -1,17 +1,25 @@
-Quick Capture is the fastest way to get words into a note.
+Quick Capture turns the books you read into notes you keep.
 
-There is one page, and three ways to add to it:
+Snap a page
+• Point the camera at a printed page and snap it. The text is picked out paragraph by paragraph.
+• Tap the paragraphs you want, or drag across just the lines you need, then add them to your note. Add a thought of your own as you go.
+• Or tap the page and type.
 
-• Type — tap the page and start writing.
-• Speak — tap Speak and talk. Your words are transcribed live and added to the page.
-• Snap — point the camera at printed text, tap the passage you want, and it is added to the page.
+Highlight and annotate
+• Everything you snap lands on one page, as quoted passages.
+• Select the words that matter and tap Highlight. Add a note under any passage in your own words.
 
-Everything you capture lands on the same page, so a shopping list, a quote from a book and a reminder you dictated on the go all end up in one place. Edit anything by hand at any time.
+Tag it
+• Add hashtags such as #strategy or #leadership. Tags you've used before are suggested as you type.
 
-When you're ready, copy the page or share it to Apple Notes, Mail, Messages or any other app.
+Take it anywhere
+• Save a Markdown note to a folder of your choice, such as your Obsidian vault, with your tags in the front matter.
+• Share an A4 PDF with your highlights marked and your notes beside them.
+• Send your highlights to WhatsApp, with the PDF attached if you like.
+• Share to Apple Notes, Mail or Messages, or copy the page.
 
 Private by design
 • No account, no sign-up.
 • No ads, no analytics, no tracking.
 • Your note is stored only on your iPhone.
-• Text recognition runs on your device, and so does speech recognition on supported iPhones.
+• Text recognition runs on your device.
