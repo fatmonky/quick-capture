@@ -31,7 +31,7 @@ struct QuickCaptureApp: App {
     }
 
     /// UI tests can pass `UITEST_APPEND_TEXT` to have a capture appended once the
-    /// main screen is showing, standing in for a Speak or Snap capture.
+    /// main screen is showing, standing in for a Snap capture.
     private func appendTestCapture() async {
         guard ProcessInfo.processInfo.arguments.contains("-uiTesting"),
               let snippet = ProcessInfo.processInfo.environment["UITEST_APPEND_TEXT"] else { return }

@@ -5,6 +5,7 @@ import SwiftUI
 struct WhatsAppExportView: View {
     let page: String
     let title: String
+    var tags: [String] = []
 
     @Environment(\.dismiss) private var dismiss
     @State private var attachPDF = false
@@ -83,7 +84,7 @@ struct WhatsAppExportView: View {
             return
         }
         do {
-            shareItem = ShareItem(items: [message.text, try PDFExporter.temporaryFile(page: page, title: title)])
+            shareItem = ShareItem(items: [message.text, try PDFExporter.temporaryFile(page: page, title: title, tags: tags)])
         } catch {
             errorMessage = error.localizedDescription
         }

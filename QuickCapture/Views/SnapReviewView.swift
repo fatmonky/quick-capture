@@ -45,22 +45,13 @@ struct SnapReviewView: View {
 
     // MARK: - Subviews
 
+    /// The count of what's picked; Retake and Add sit at the bottom, within reach.
     private var topBar: some View {
-        HStack {
-            Button("Retake", action: onRetake)
-            Spacer()
-            Text(selected.isEmpty ? "Pick Text" : "\(pickedParagraphCount) Picked")
-                .font(.headline)
-                .monospacedDigit()
-            Spacer()
-            Button(selected.isEmpty ? "Add All" : "Add") {
-                onAdd(TextLayout.text(of: page, rows: selected.isEmpty ? nil : selected), note)
-            }
-            .fontWeight(.semibold)
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal)
-        .frame(minHeight: 52)
+        Text(selected.isEmpty ? "Pick Text" : "\(pickedParagraphCount) Picked")
+            .font(.headline)
+            .monospacedDigit()
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, minHeight: 44)
     }
 
     private var bottomPanel: some View {
@@ -77,9 +68,34 @@ struct SnapReviewView: View {
                 .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
                 .foregroundStyle(.white)
                 .accessibilityIdentifier("snapNote")
+            actionButtons
+                .padding(.top, 4)
         }
         .padding()
         .background(Color(white: 0.1))
+    }
+
+    private var actionButtons: some View {
+        HStack(spacing: 12) {
+            Button(action: onRetake) {
+                Label("Retake", systemImage: "camera.rotate")
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .background(.white.opacity(0.15), in: Capsule())
+                    .contentShape(Capsule())
+            }
+            Button {
+                onAdd(TextLayout.text(of: page, rows: selected.isEmpty ? nil : selected), note)
+            } label: {
+                Label(selected.isEmpty ? "Add All" : "Add", systemImage: "plus")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: .infinity, minHeight: 50)
+                    .background(ContentView.snapColor.opacity(0.9), in: Capsule())
+                    .contentShape(Capsule())
+            }
+        }
     }
 
     /// Each paragraph gets a faint outline; picked lines are filled yellow.

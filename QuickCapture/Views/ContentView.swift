@@ -1,42 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// The ways to add text to the text-space (besides typing into it directly).
-enum CaptureMode: String, Identifiable, CaseIterable {
-    case speak, snap
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .speak: "Speak"
-        case .snap: "Snap"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .speak: "mic.fill"
-        case .snap: "camera.fill"
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .speak: .red
-        case .snap: Color(red: 1.0, green: 0.72, blue: 0.0) // amber
-        }
-    }
-
-    /// Text and icon colour that reads on `color`.
-    var labelColor: Color {
-        switch self {
-        case .speak: .white
-        case .snap: .black
-        }
-    }
-}
-
 /// Where the page can be exported to.
 enum ExportDestination: Identifiable {
     /// A Markdown note in the chosen folder, such as an Obsidian inbox.
@@ -55,7 +19,8 @@ enum ExportDestination: Identifiable {
 
 struct ContentView: View {
     @Environment(CaptureStore.self) private var store
-    @State private var activeCapture: CaptureMode?
+    @State private var snapping = false
+    @State private var editingTags = false
     @State private var showCopied = false
     @State private var isEditing = false
     /// Waiting for a title before exporting.
@@ -93,11 +58,11 @@ struct ContentView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbarContent }
                 .sensoryFeedback(.success, trigger: store.appendCount)
-                .sheet(item: captureBinding(only: .speak)) { _ in
-                    AudioCaptureSheet()
-                }
-                .fullScreenCover(item: captureBinding(only: .snap)) { _ in
+                .fullScreenCover(isPresented: $snapping) {
                     SnapCaptureView()
+                }
+                .sheet(isPresented: $editingTags) {
+                    TagEditor(tags: store.tags) { store.tags = $0 }
                 }
                 .sheet(item: $shareItem) { item in
                     ActivityView(items: item.items)
@@ -105,7 +70,7 @@ struct ContentView: View {
                         .ignoresSafeArea()
                 }
                 .sheet(isPresented: $showingWhatsApp) {
-                    WhatsAppExportView(page: store.text, title: exportTitle)
+                    WhatsAppExportView(page: store.text, title: exportTitle, tags: store.tags)
                 }
                 .alert("Title", isPresented: .constant(pendingExport != nil), presenting: pendingExport) { destination in
                     TextField("Book or topic", text: $exportTitle)
@@ -166,46 +131,65 @@ struct ContentView: View {
     // MARK: - Subviews
 
     private var emptyStateHint: some View {
-        Text("Tap here to type, or use Speak or Snap to capture text.\nEverything you capture is added here.")
+        Text("Tap here to type, or use Snap to capture printed text.\nEverything you capture is added here.")
             .foregroundStyle(.secondary)
             .padding(.horizontal, 16)
             .padding(.top, 8)
             .allowsHitTesting(false)
     }
 
+    /// The note's tags on the left (tap to change them), the counts on the right.
     private var countFooter: some View {
         let words = store.text.split(whereSeparator: \.isWhitespace).count
-        return HStack {
-            Spacer()
+        return HStack(spacing: 12) {
+            if !store.tags.isEmpty {
+                Button(NoteTags.display(store.tags)) { editingTags = true }
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+                    .accessibilityLabel("Tags: \(NoteTags.display(store.tags))")
+                    .accessibilityHint("Changes the note's tags")
+            }
+            Spacer(minLength: 0)
             Text("\(words) words · \(store.text.count) characters")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
+                .layoutPriority(1)
         }
         .padding(.horizontal)
         .padding(.vertical, 6)
     }
 
+    /// Snap is the main button, in the middle; tags and export sit just below it.
     private var captureBar: some View {
-        HStack(spacing: 12) {
-            ForEach(CaptureMode.allCases) { mode in
-                Button {
-                    isEditing = false
-                    activeCapture = mode
-                } label: {
-                    Label(mode.title, systemImage: mode.systemImage)
-                        .font(.headline)
-                        .foregroundStyle(mode.labelColor)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                        .background(mode.color.opacity(0.9), in: Capsule())
-                        .contentShape(Capsule())
+        VStack(spacing: 10) {
+            Button {
+                isEditing = false
+                snapping = true
+            } label: {
+                Label("Snap", systemImage: "camera.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.black)
+                    .frame(maxWidth: 300, minHeight: 60)
+                    .background(Self.snapColor.opacity(0.9), in: Capsule())
+                    .contentShape(Capsule())
+            }
+
+            HStack(spacing: 12) {
+                Button { editingTags = true } label: {
+                    Label("Tags", systemImage: "number")
+                        .smallCapsule()
                 }
+                exportMenu
             }
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal)
-        .padding(.top, 8)
+        .padding(.top, 6)
         .padding(.bottom, 4)
     }
+
+    static let snapColor = Color(red: 1.0, green: 0.72, blue: 0.0) // amber
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
@@ -225,8 +209,6 @@ struct ContentView: View {
                     copyAll()
                 }
                 .disabled(store.text.isEmpty)
-
-                exportMenu
             }
         }
     }
@@ -245,18 +227,9 @@ struct ContentView: View {
             Button("Choose Markdown Folder…", systemImage: "folder.badge.gearshape") { choosingFolder = true }
         } label: {
             Label("Export", systemImage: "square.and.arrow.up")
+                .smallCapsule()
         }
         .disabled(store.text.isEmpty)
-    }
-
-    // MARK: - Presentation
-
-    /// Snap runs full screen (it hosts the camera); Speak is a sheet.
-    private func captureBinding(only mode: CaptureMode) -> Binding<CaptureMode?> {
-        Binding(
-            get: { activeCapture == mode ? mode : nil },
-            set: { activeCapture = $0 }
-        )
     }
 
     // MARK: - Actions
@@ -266,12 +239,12 @@ struct ContentView: View {
         case .markdownFolder:
             saveToFolder()
         case .markdownFile:
-            shareMarkdownFile(MarkdownFormatter.note(page: store.text, title: exportTitle))
+            shareMarkdownFile(MarkdownFormatter.note(page: store.text, title: exportTitle, tags: store.tags))
         case .notes:
-            shareItem = ShareItem(items: [RichTextFormatter.note(page: store.text, title: exportTitle)])
+            shareItem = ShareItem(items: [RichTextFormatter.note(page: store.text, title: exportTitle, tags: store.tags)])
         case .pdf:
             do {
-                shareItem = ShareItem(items: [try PDFExporter.temporaryFile(page: store.text, title: exportTitle)])
+                shareItem = ShareItem(items: [try PDFExporter.temporaryFile(page: store.text, title: exportTitle, tags: store.tags)])
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -287,7 +260,7 @@ struct ContentView: View {
             choosingFolder = true
             return
         }
-        let note = MarkdownFormatter.note(page: store.text, title: exportTitle)
+        let note = MarkdownFormatter.note(page: store.text, title: exportTitle, tags: store.tags)
         Task {
             do {
                 // Another app's folder can take a while to answer.
@@ -315,6 +288,17 @@ struct ContentView: View {
             try? await Task.sleep(for: .seconds(1.5))
             showCopied = false
         }
+    }
+}
+
+private extension View {
+    /// The look of the smaller buttons under Snap.
+    func smallCapsule() -> some View {
+        font(.subheadline.weight(.medium))
+            .padding(.horizontal, 18)
+            .frame(minHeight: 40)
+            .background(.fill.tertiary, in: Capsule())
+            .contentShape(Capsule())
     }
 }
 

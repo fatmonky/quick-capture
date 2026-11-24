@@ -78,7 +78,7 @@ enum PDFExporter {
 
     // MARK: - Laying out
 
-    static func attributedText(page: String, title: String, date: Date) -> NSAttributedString {
+    static func attributedText(page: String, title: String, tags: [String] = [], date: Date) -> NSAttributedString {
         let result = NSMutableAttributedString()
         let title = displayTitle(title)
 
@@ -87,12 +87,20 @@ enum PDFExporter {
         result.append(NSAttributedString(string: title + "\n", attributes: [
             .font: UIFont.systemFont(ofSize: 20, weight: .bold), .foregroundColor: text, .paragraphStyle: titleStyle,
         ]))
+        // The space before the page goes under the tags, if there are any.
         let metaStyle = NSMutableParagraphStyle()
         metaStyle.paragraphSpacing = 18
+        let dateStyle = NSMutableParagraphStyle()
+        dateStyle.paragraphSpacing = tags.isEmpty ? 18 : 3
         result.append(NSAttributedString(
             string: "Captured \(date.formatted(date: .long, time: .shortened)) · Quick Capture\n",
-            attributes: [.font: UIFont.systemFont(ofSize: 9), .foregroundColor: muted, .paragraphStyle: metaStyle]
+            attributes: [.font: UIFont.systemFont(ofSize: 9), .foregroundColor: muted, .paragraphStyle: dateStyle]
         ))
+        if !tags.isEmpty {
+            result.append(NSAttributedString(string: NoteTags.display(tags) + "\n", attributes: [
+                .font: UIFont.systemFont(ofSize: 9, weight: .medium), .foregroundColor: noteColor, .paragraphStyle: metaStyle,
+            ]))
+        }
 
         let body = UIFont.systemFont(ofSize: 11)
         let bodyStyle = NSMutableParagraphStyle()
@@ -159,8 +167,8 @@ enum PDFExporter {
 
     // MARK: - Rendering
 
-    static func pdfData(page: String, title: String, date: Date = .now) -> Data {
-        let storage = NSTextStorage(attributedString: attributedText(page: page, title: title, date: date))
+    static func pdfData(page: String, title: String, tags: [String] = [], date: Date = .now) -> Data {
+        let storage = NSTextStorage(attributedString: attributedText(page: page, title: title, tags: tags, date: date))
         let layoutManager = NSLayoutManager()
         storage.addLayoutManager(layoutManager)
 
@@ -246,12 +254,12 @@ enum PDFExporter {
     }
 
     /// Writes the PDF to a new temporary folder, for the share sheet.
-    static func temporaryFile(page: String, title: String, date: Date = .now) throws -> URL {
+    static func temporaryFile(page: String, title: String, tags: [String] = [], date: Date = .now) throws -> URL {
         let folder = FileManager.default.temporaryDirectory
             .appending(path: "Exports/\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let destination = folder.appending(path: fileName(for: title), directoryHint: .notDirectory)
-        try pdfData(page: page, title: title, date: date).write(to: destination, options: .atomic)
+        try pdfData(page: page, title: title, tags: tags, date: date).write(to: destination, options: .atomic)
         return destination
     }
 }

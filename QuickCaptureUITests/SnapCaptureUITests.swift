@@ -36,6 +36,10 @@ final class SnapCaptureUITests: XCTestCase {
         // The photo comes back to pick from; with nothing picked, Add All adds it all.
         let addAll = app.buttons["Add All"]
         XCTAssertTrue(addAll.waitForExistence(timeout: 20))
+        // Retake and Add sit at the bottom, below the photo, not up at the top.
+        let screen = app.windows.firstMatch.frame
+        XCTAssertGreaterThan(addAll.frame.minY, screen.midY, "Add is at the bottom")
+        XCTAssertGreaterThan(app.buttons["Retake"].frame.minY, screen.midY, "Retake is at the bottom")
         let note = app.textFields["snapNote"]
         note.tap()
         note.typeText("My note")
@@ -45,7 +49,7 @@ final class SnapCaptureUITests: XCTestCase {
         add(review)
         addAll.tap()
 
-        XCTAssertTrue(app.buttons["Speak"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Snap"].waitForExistence(timeout: 5))
         let editor = app.textViews.firstMatch
         let filled = NSPredicate(format: "value != ''")
         wait(for: [expectation(for: filled, evaluatedWith: editor)], timeout: 5)

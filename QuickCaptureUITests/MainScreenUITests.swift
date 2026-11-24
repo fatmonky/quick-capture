@@ -73,19 +73,50 @@ final class MainScreenUITests: XCTestCase {
         XCTAssertEqual(snap.frame.midY, restingY, accuracy: 2)
     }
 
-    func testEditingShowsDoneInsteadOfShareButtons() {
+    func testEditingShowsDoneInsteadOfCopy() {
         app.launchEnvironment["UITEST_SEED_TEXT"] = "Some text"
         app.launch()
 
-        XCTAssertTrue(app.buttons["Export"].exists)
+        XCTAssertTrue(app.buttons["Copy"].exists)
         app.textViews.firstMatch.tap()
 
         let done = app.buttons["Done"]
         XCTAssertTrue(done.waitForExistence(timeout: 3))
-        XCTAssertFalse(app.buttons["Export"].exists)
+        XCTAssertFalse(app.buttons["Copy"].exists)
         done.tap()
 
-        XCTAssertTrue(app.buttons["Export"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Copy"].waitForExistence(timeout: 3))
         XCTAssertFalse(app.keyboards.firstMatch.exists)
+    }
+
+    func testSnapIsTheOnlyCaptureButtonWithTagsAndExportBelowIt() {
+        app.launchEnvironment["UITEST_SEED_TEXT"] = "Some text"
+        app.launch()
+
+        let snap = app.buttons["Snap"]
+        XCTAssertTrue(snap.waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["Speak"].exists)
+        let window = app.windows.firstMatch.frame
+        XCTAssertEqual(snap.frame.midX, window.midX, accuracy: 2)
+        for name in ["Tags", "Export"] {
+            let button = app.buttons[name]
+            XCTAssertTrue(button.exists, name)
+            XCTAssertGreaterThan(button.frame.minY, snap.frame.maxY, "\(name) should sit below Snap")
+        }
+        attachScreenshot("snap-tags-export")
+    }
+
+    func testAddingTagsShowsThemUnderThePage() {
+        app.launchEnvironment["UITEST_SEED_TEXT"] = "Some text"
+        app.launch()
+
+        app.buttons["Tags"].tap()
+        let field = app.textFields["tagField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 3))
+        field.typeText("Strategy power")
+        app.buttons["Save"].tap()
+
+        XCTAssertTrue(app.buttons["Tags: #strategy #power"].waitForExistence(timeout: 3))
+        attachScreenshot("tags-added")
     }
 }

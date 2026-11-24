@@ -73,6 +73,7 @@ struct MarkdownNote: Equatable {
 /// title: "The Lord of the Rings"
 /// tags:
 ///   - "reading"
+///   - "strategy"
 /// ---
 ///
 /// # The Lord of the Rings
@@ -85,7 +86,7 @@ enum MarkdownFormatter {
     static let defaultTitle = "Reading notes"
     static let maxSlugLength = 60
 
-    static func note(page: String, title: String, at date: Date = .now,
+    static func note(page: String, title: String, tags: [String] = [], at date: Date = .now,
                      in timeZone: TimeZone = .current) -> MarkdownNote {
         let title = collapse(title).isEmpty ? defaultTitle : collapse(title)
         let timestamp = ISO8601DateFormatter()
@@ -97,11 +98,12 @@ enum MarkdownFormatter {
             "status: fleeting",
             "title: \(quoted(title))",
             "tags:",
-            "  - \"reading\"",
+        ] + (["reading"] + tags.filter { $0 != "reading" }).map { "  - \(quoted($0))" } + [
             "---",
-        ].joined(separator: "\n")
+        ]
+        let frontMatterText = frontMatter.joined(separator: "\n")
         let body = page.trimmingCharacters(in: .whitespacesAndNewlines)
-        let text = [frontMatter, "# \(title)", body].filter { !$0.isEmpty }.joined(separator: "\n\n") + "\n"
+        let text = [frontMatterText, "# \(title)", body].filter { !$0.isEmpty }.joined(separator: "\n\n") + "\n"
         return MarkdownNote(fileName: fileName(title: title, stamp: stamp(date, in: timeZone)), text: text)
     }
 
@@ -137,12 +139,17 @@ enum MarkdownFormatter {
 /// Formats the page as rich text for Apple Notes, which doesn't read Markdown:
 /// quotes are indented and in italics, highlights are marked, and notes are plain.
 enum RichTextFormatter {
-    static func note(page: String, title: String) -> NSAttributedString {
+    static func note(page: String, title: String, tags: [String] = []) -> NSAttributedString {
         let result = NSMutableAttributedString()
         let title = MarkdownFormatter.collapse(title)
         if !title.isEmpty {
             result.append(NSAttributedString(string: title + "\n", attributes: [
                 .font: UIFont.preferredFont(forTextStyle: .title2).withTraits(.traitBold),
+            ]))
+        }
+        if !tags.isEmpty {
+            result.append(NSAttributedString(string: NoteTags.display(tags) + "\n\n", attributes: [
+                .font: UIFont.preferredFont(forTextStyle: .subheadline), .foregroundColor: UIColor.secondaryLabel,
             ]))
         }
 
